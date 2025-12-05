@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
@@ -37,7 +37,7 @@ async def root():
         "message": "FastAPIアプリへようこそ！",
         "endpoints": {
             "health": "/health",
-            "items": "/items",
+            "items": "/items (検索機能付き)",
             "docs": "/docs"
         }
     }
@@ -53,9 +53,31 @@ async def health_check():
 
 
 @app.get("/items", response_model=List[Item])
-async def get_items():
-    """すべてのアイテムを取得"""
-    return items_db
+async def get_items(
+    search: Optional[str] = Query(None, description="名前または説明で検索"),
+    min_price: Optional[float] = Query(None, description="最小価格"),
+    max_price: Optional[float] = Query(None, description="最大価格")
+):
+    """すべてのアイテムを取得（検索・フィルタリング対応）"""
+    filtered_items = items_db.copy()
+    
+    # テキスト検索
+    if search:
+        search_lower = search.lower()
+        filtered_items = [
+            item for item in filtered_items
+            if search_lower in item["name"].lower() or 
+               (item["description"] and search_lower in item["description"].lower())
+        ]
+    
+    # 価格範囲フィルタ
+    if min_price is not None:
+        filtered_items = [item for item in filtered_items if item["price"] >= min_price]
+    
+    if max_price is not None:
+        filtered_items = [item for item in filtered_items if item["price"] <= max_price]
+    
+    return filtered_items
 
 
 @app.get("/items/{item_id}", response_model=Item)
